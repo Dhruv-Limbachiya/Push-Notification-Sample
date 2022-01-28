@@ -87,6 +87,8 @@ class MyFirebaseMessagingService : FirebaseMessagingService() {
             image = notification.imageUrl.toString()
 
             loadImageFromUrl(image)
+        } else {
+            NotificationUtil.playSound(applicationContext);
         }
     }
 

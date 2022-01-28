@@ -2,18 +2,19 @@ package com.example.pushnotificationsample.util
 
 import android.app.ActivityManager
 import android.app.ActivityManager.RunningAppProcessInfo
+import android.app.Notification
 import android.app.NotificationChannel
 import android.app.NotificationManager
+import android.content.ContentResolver
 import android.content.Context
 import android.graphics.Bitmap
-import android.graphics.BitmapFactory
+import android.media.AudioAttributes
+import android.media.RingtoneManager
+import android.net.Uri
 import android.os.Build
-import android.util.Log
 import androidx.core.app.NotificationCompat
 import com.example.pushnotificationsample.R
-import java.io.IOException
-import java.net.HttpURLConnection
-import java.net.URL
+import kotlin.random.Random
 
 
 /**
@@ -23,12 +24,9 @@ object NotificationUtil {
 
     private const val NOTIFICATION_CHANNEL = "Push Notification Sample"
     private const val NOTIFICATION_CHANNEL_ID = "PUSH_NOTIFICATION_SAMPLE_CHANNEL_ID"
-    private const val TAG = "NotificationUtil"
-    private const val TEMP_NOTIFICATION_ID = 1
-    private const val TEMP_NOTIFICATION_ID_2 = 2
 
     fun createNotificationChannel(context: Context) {
-        if(Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
 
             val channelName = NOTIFICATION_CHANNEL
             val importance = NotificationManager.IMPORTANCE_HIGH
@@ -37,7 +35,11 @@ object NotificationUtil {
                 NOTIFICATION_CHANNEL_ID,
                 channelName,
                 importance
-            )
+            ).apply {
+                setSound(getSound(context), getNotificationAudioAttributes())
+                enableLights(true);
+                enableVibration(true);
+            }
 
             getNotificationManager(context).createNotificationChannel(notificationChannel)
         }
@@ -46,20 +48,29 @@ object NotificationUtil {
     /**
      * Normal notification
      */
-    fun showNormalNotification(context: Context,title: String, message: String) {
+    fun showNormalNotification(context: Context, title: String, message: String) {
         val notificationBuilder = NotificationCompat.Builder(context, NOTIFICATION_CHANNEL_ID)
             .setContentTitle(title)
             .setContentText(message)
             .setSmallIcon(R.mipmap.ic_launcher)
+            .setPriority(NotificationCompat.PRIORITY_HIGH) // Set the interrupting behaviour by giving priority.
             .setAutoCancel(true)
 
-        getNotificationManager(context).notify(TEMP_NOTIFICATION_ID_2,notificationBuilder.build())
+        getNotificationManager(context).notify(
+            getRandomNotificationId(),
+            notificationBuilder.build()
+        )
     }
 
     /**
      * Build notification using big picture style template
      */
-    fun showBigPictureStyleNotification(context: Context, title: String, message: String, bitmap: Bitmap) {
+    fun showBigPictureStyleNotification(
+        context: Context,
+        title: String,
+        message: String,
+        bitmap: Bitmap
+    ) {
 
         val bigPictureStyle = NotificationCompat.BigPictureStyle()
             .bigPicture(bitmap)
@@ -71,33 +82,47 @@ object NotificationUtil {
             .setAutoCancel(true)
             .setContentTitle(title)
             .setContentText(message)
+            .setPriority(Notification.PRIORITY_MAX)
             .setSmallIcon(R.mipmap.ic_launcher)
             .setLargeIcon(bitmap)
+            .setSound(getSound(context))
             .setStyle(bigPictureStyle)
 
-        getNotificationManager(context).notify(TEMP_NOTIFICATION_ID,notificationBuilder.build());
+        getNotificationManager(context).notify(
+            getRandomNotificationId(),
+            notificationBuilder.build()
+        )
     }
 
+
+    // Helper methods
 
     /**
-     * Helper methods
+     * Method to parse raw sound file into uri for notification.
      */
-    private fun getNotificationManager(context: Context) : NotificationManager {
-        return context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+    private fun getSound(context: Context): Uri {
+        return Uri.parse(ContentResolver.SCHEME_ANDROID_RESOURCE + "://" + context.packageName + "/" + R.raw.notification_sound)
     }
 
-    private fun getBitmapFromUrl(imageUrl: String) : Bitmap?{
-        return try {
-            val url = URL(imageUrl)
-            val httpURLConnection = url.openConnection() as HttpURLConnection
-            httpURLConnection.doInput = true
-            httpURLConnection.connect()
-            val inputStream = httpURLConnection.inputStream
-            BitmapFactory.decodeStream(inputStream);
-        } catch (e: IOException) {
-            Log.e(TAG, "getBitmapFromUrl: ${e.message}", e)
-            null;
-        }
+    private fun getNotificationAudioAttributes(): AudioAttributes {
+        return AudioAttributes.Builder()
+            .setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION)
+            .setUsage(AudioAttributes.USAGE_NOTIFICATION)
+            .build()
+    }
+
+    /**
+     * Generates and return random number from 0 to 1000
+     */
+    private fun getRandomNotificationId(): Int {
+        return Random(System.currentTimeMillis()).nextInt(1000)
+    }
+
+    /**
+     * Get the notification manager from the system service
+     */
+    private fun getNotificationManager(context: Context): NotificationManager {
+        return context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
     }
 
     /**
@@ -117,6 +142,20 @@ object NotificationUtil {
             }
         }
         return isInBackground
+    }
+
+    /**
+     * plays notification sound
+     */
+    fun playSound(context: Context) {
+        try {
+            val alarmSound =
+                Uri.parse(ContentResolver.SCHEME_ANDROID_RESOURCE + "://" + context.packageName + "/" + R.raw.notification_sound)
+            val r = RingtoneManager.getRingtone(context, alarmSound)
+            r.play()
+        } catch (e: Exception) {
+            e.printStackTrace()
+        }
     }
 
 }
