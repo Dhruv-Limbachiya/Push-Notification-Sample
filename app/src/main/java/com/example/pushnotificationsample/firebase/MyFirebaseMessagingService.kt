@@ -1,9 +1,17 @@
 package com.example.pushnotificationsample.firebase
 
+import android.graphics.Bitmap
+import android.graphics.drawable.Drawable
+import android.os.Handler
+import android.os.Looper
 import android.util.Log
 import com.example.pushnotificationsample.R
+import com.example.pushnotificationsample.util.NotificationUtil
 import com.google.firebase.messaging.FirebaseMessagingService
 import com.google.firebase.messaging.RemoteMessage
+import com.squareup.picasso.Picasso
+import com.squareup.picasso.Picasso.LoadedFrom
+
 
 /**
  * Created By Dhruv Limbachiya on 20-12-2021 01:20 PM.
@@ -26,7 +34,7 @@ class MyFirebaseMessagingService : FirebaseMessagingService() {
 
         // store token in shared preference for further use.
         storeTokenInSharedPreference(token)
-        
+
         // register token to server.
         registerTokenToServer(token)
     }
@@ -34,54 +42,102 @@ class MyFirebaseMessagingService : FirebaseMessagingService() {
     override fun onMessageReceived(remoteMessage: RemoteMessage) {
         super.onMessageReceived(remoteMessage)
 
+        Log.i(TAG, "onMessageReceived: ")
+
         // remote message is notification
         remoteMessage.notification?.let { notification ->
             handleNotification(notification)
         }
 
         // remote message is data message.
-        if(remoteMessage.data.isNotEmpty()) {
+        if (remoteMessage.data.isNotEmpty()) {
             handleDataMessage(remoteMessage.data)
         }
     }
+
+    var title: String? = null
+    var message: String? = null
+    var image: String? = null
 
     /**
      * Handles data message and build & fire notification using data.
      */
     private fun handleDataMessage(data: Map<String, String>) {
-        // TODO : Extract data from Map,build notification and fire notification.
+        title = data[TITLE_KEY]
 
-        val title = data[TITLE_KEY]
-        val message = data[MESSAGE_KEY]
-        val image = data[IMAGE_URL_KEY]
+        message = data[MESSAGE_KEY]
 
-        buildNotification(title,message,image)
+        image = data[IMAGE_URL_KEY]
+
+        loadImageFromUrl(image)
     }
 
     /**
      * Handles notification in both the states(foreground/background).
      */
     private fun handleNotification(notification: RemoteMessage.Notification) {
-        // TODO : Extract notification info,build notification and fire notification
         /**
          * Check app state(background/foreground).
          * if it's foreground then build and fire notification else firebase handle notification by itself in background state.
          */
+        if (!NotificationUtil.isAppIsInBackground(applicationContext)) {
+            // In foreground
+            title = notification.title
+            message = notification.body
+            image = notification.imageUrl.toString()
+
+            loadImageFromUrl(image)
+        }
     }
 
 
-    private fun buildNotification(title: String?, message: String?, image: String?) {
-        if(title != null && message != null) {
-            if(image != null && image.isNotEmpty()) {
-                // Todo : show Big Picture Style notification
-//                showBigPictureStyleNotification(title,message,image)
+    private fun buildNotification(
+        title: String?,
+        message: String?,
+        bitmap: Bitmap? = null
+    ) {
+        if (title != null && message != null) {
+            if (bitmap != null) {
+                NotificationUtil.showBigPictureStyleNotification(
+                    applicationContext,
+                    title,
+                    message,
+                    bitmap
+                )
                 return
             }
 
-            // show normal notification
-            // Todo: show Big Text or default style notification.
+            NotificationUtil.showNormalNotification(applicationContext, title, message)
+            return
         }
 
+    }
+
+
+    private var target = object : com.squareup.picasso.Target {
+
+        override fun onBitmapLoaded(bitmap: Bitmap?, from: LoadedFrom?) {
+            buildNotification(title, message, bitmap)
+        }
+
+        override fun onBitmapFailed(e: Exception?, errorDrawable: Drawable?) {}
+        override fun onPrepareLoad(placeHolderDrawable: Drawable?) {}
+    }
+
+    /**
+     * load the image from the url into custom target.
+     */
+    private fun loadImageFromUrl(image: String?) {
+        val uiHandler = Handler(Looper.getMainLooper())
+        if (image != null && image.isNotEmpty()) {
+            uiHandler.post {
+                Picasso.get()
+                    .load(image)
+                    .into(target)
+            }
+        } else {
+            buildNotification(title, message) // build normal notification.
+        }
     }
 
 
@@ -92,7 +148,7 @@ class MyFirebaseMessagingService : FirebaseMessagingService() {
         val appName = applicationContext.getString(R.string.app_name)
         val sharedPref = applicationContext.getSharedPreferences(appName, MODE_PRIVATE)
         val editor = sharedPref.edit()
-        editor.putString(GCM_TOKEN_KEY,token)
+        editor.putString(GCM_TOKEN_KEY, token)
         editor.apply()
     }
 
@@ -106,8 +162,8 @@ class MyFirebaseMessagingService : FirebaseMessagingService() {
     companion object {
         private const val TAG = "MyFirebaseMessaging"
         private const val TITLE_KEY = "title"
-        private const val MESSAGE_KEY = "message"
-        private const val IMAGE_URL_KEY = "image"
+        private const val MESSAGE_KEY = "content"
+        private const val IMAGE_URL_KEY = "imageUrl"
 
         const val GCM_TOKEN_KEY = "GCM_TOKEN"
     }
